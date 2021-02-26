@@ -25,7 +25,7 @@ $ /usr/local/bin/apachectl -t -D DUMP_MODULES
 ```
 
 
-##Stopping default apache httpd :
+## Stopping default apache httpd :
 
 
 ```
@@ -33,7 +33,7 @@ $ sudo launchctl unload /System/Library/LaunchDaemons/org.apache.httpd.plist
 ```
 
 
-##Starting custom build / patched Apache :
+## Starting custom build / patched Apache :
 
 
 ```
