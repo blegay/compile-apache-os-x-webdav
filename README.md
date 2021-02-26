@@ -42,7 +42,7 @@ $ sudo crontab -u root -l
 ```
 
 
-## Tesing apache dav with non patched version :
+## Testing apache dav with non patched version :
   
 ```
 $ curl 'http://192.168.1.xxx/share/' \
@@ -67,7 +67,7 @@ $ curl 'http://192.168.1.xxx/share/' \
 </D:multistatus>
 ```
 
-## Tesing apache dav with patched version :
+## Testing apache dav with patched version :
 
 ```
 
