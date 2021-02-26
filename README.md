@@ -12,7 +12,7 @@ $ sudo ./make_httpd.sh
 NOTE : make sure there are no space in the path leading to the shell script... Build will fail.
 
 
-## Testing custom build / patched Apache verrsion : 
+## Checking custom build / patched Apache verrsion : 
 
 ```
 $ /usr/local/bin/apachectl -V
