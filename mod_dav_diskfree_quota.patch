@@ -1,0 +1,169 @@
+--- repos.c.bkp.c	2020-07-05 14:55:38.000000000 +0200
++++ repos.c	2021-02-24 16:02:14.000000000 +0100
+@@ -27,6 +27,16 @@
+ #include <unistd.h>             /* for getpid() */
+ #endif
+ 
++#define DAV_DISKFREE_QUOTA_ENABLE 1
++#ifdef DAV_DISKFREE_QUOTA_ENABLE
++#ifdef __linux__
++#include <sys/vfs.h>
++#else
++#include <sys/param.h>
++#include <sys/mount.h>
++#endif
++#endif
++
+ #include "httpd.h"
+ #include "http_log.h"
+ #include "http_protocol.h"      /* for ap_set_* (in dav_fs_set_headers) */
+@@ -140,6 +150,14 @@
+ */
+ #define DAV_PROPID_FS_executable        1
+ 
++#ifdef DAV_DISKFREE_QUOTA_ENABLE
++#define DAV_PROPID_FS_quota                10102
++#define DAV_PROPID_FS_quotaused            10103
++#define DAV_PROPID_FS_quotaavailbytes      10104
++#define DAV_PROPID_FS_quotausedbytes       10105
++#define DAV_PROPID_FS_quotaassignbytes     10106
++#endif
++
+ /*
+  * prefix for temporary files
+  */
+@@ -180,7 +198,44 @@
+         DAV_PROPID_FS_executable,
+         0       /* handled special in dav_fs_is_writable */
+     },
+-
++    
++#ifdef DAV_DISKFREE_QUOTA_ENABLE
++    { /* Used by Apple's mount_webdav */
++        DAV_FS_URI_DAV,
++        "quota",
++        DAV_PROPID_FS_quota,
++        0
++    },
++    
++    { /* Used by Apple's mount_webdav */
++        DAV_FS_URI_DAV,
++        "quotaused",
++        DAV_PROPID_FS_quotaused,
++        0
++    },
++    
++    { /* From draft-ietf-webdav-quota-02.txt */
++        DAV_FS_URI_DAV,
++        "quota-available-bytes",
++        DAV_PROPID_FS_quotaavailbytes,
++        0
++    },
++    
++    { /* From draft-ietf-webdav-quota-02.txt */
++        DAV_FS_URI_DAV,
++        "quota-used-bytes",
++        DAV_PROPID_FS_quotausedbytes,
++        0
++    },
++    
++    { /* From draft-ietf-webdav-quota-02.txt */
++        DAV_FS_URI_DAV,
++        "quota-assigned-bytes",
++        DAV_PROPID_FS_quotaassignbytes,
++        0
++    },
++#endif
++    
+     { 0 }        /* sentinel */
+ };
+ 
+@@ -1919,6 +1974,10 @@
+     /* a 64-bit size can be 20 chars plus a null term */
+     char buf[DAV_TIMEBUF_SIZE];
+ 
++#ifdef DAV_DISKFREE_QUOTA_ENABLE
++    struct statfs diskstats;
++#endif
++
+     /*
+     ** None of FS provider properties are defined if the resource does not
+     ** exist. Just bail for this case.
+@@ -1979,6 +2038,57 @@
+             value = "F";
+         break;
+ 
++#ifdef DAV_DISKFREE_QUOTA_ENABLE
++        case DAV_PROPID_FS_quota:
++            
++            if (statfs(resource->info->pathname,&diskstats))
++                return DAV_PROP_INSERT_NOTDEF;
++            
++            (void) sprintf(buf, "%" APR_OFF_T_FMT,
++                           ((long long)diskstats.f_bsize*diskstats.f_blocks)/512);
++            value = buf;
++            break;
++            
++        case DAV_PROPID_FS_quotaassignbytes:
++            
++            if (statfs(resource->info->pathname,&diskstats))
++                return DAV_PROP_INSERT_NOTDEF;
++            (void) sprintf(buf, "%" APR_OFF_T_FMT,
++                           (long long)diskstats.f_bsize*diskstats.f_blocks);
++            value = buf;
++            break;
++            
++        case DAV_PROPID_FS_quotaused:
++            
++            if (statfs(resource->info->pathname,&diskstats))
++                return DAV_PROP_INSERT_NOTDEF;
++            
++            (void) sprintf(buf, "%" APR_OFF_T_FMT,
++                           ((long long)diskstats.f_bsize*(diskstats.f_blocks-diskstats.f_bavail))/512);
++            value = buf;
++            break;
++            
++        case DAV_PROPID_FS_quotausedbytes:
++            
++            if (statfs(resource->info->pathname,&diskstats))
++                return DAV_PROP_INSERT_NOTDEF;
++            
++            (void) sprintf(buf, "%" APR_OFF_T_FMT,
++                           (long long) diskstats.f_bsize*
++                           (diskstats.f_blocks-diskstats.f_bavail));
++            value = buf;
++            break;
++            
++        case DAV_PROPID_FS_quotaavailbytes:
++            if (statfs(resource->info->pathname,&diskstats))
++                return DAV_PROP_INSERT_NOTDEF;
++            
++            (void) sprintf(buf, "%" APR_OFF_T_FMT,
++                           (long long) diskstats.f_bsize*diskstats.f_bavail);
++            value = buf;
++            break;
++#endif
++
+     default:
+         /* ### what the heck was this property? */
+         return DAV_PROP_INSERT_NOTDEF;
+@@ -2237,6 +2347,19 @@
+     (void) dav_fs_insert_prop(resource, DAV_PROPID_getetag,
+                               what, phdr);
+ 
++#if DAV_DISKFREE_QUOTA_ENABLE
++    (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_quota,
++                              what, phdr);
++    (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_quotaused,
++                              what, phdr);
++    (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_quotausedbytes,
++                              what, phdr);
++    (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_quotaassignbytes,
++                              what, phdr);
++    (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_quotaavailbytes,
++                              what, phdr);
++#endif
++
+ #ifdef DAV_FS_HAS_EXECUTABLE
+     /* Only insert this property if it is defined for this platform. */
+     (void) dav_fs_insert_prop(resource, DAV_PROPID_FS_executable,
